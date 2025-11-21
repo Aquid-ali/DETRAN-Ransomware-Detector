@@ -1,0 +1,319 @@
+import os
+import json
+import math
+import subprocess
+import logging
+import shutil
+from pathlib import Path
+
+from flask import Flask, request, jsonify
+from flask_cors import CORS
+from dotenv import load_dotenv
+import requests
+
+# Optional imports
+try:
+    import pyclamd
+    CLAMD_AVAILABLE = True
+except:
+    CLAMD_AVAILABLE = False
+
+try:
+    import yara
+    YARA_AVAILABLE = True
+except:
+    YARA_AVAILABLE = False
+
+try:
+    import magic
+    MAGIC_AVAILABLE = True
+except:
+    MAGIC_AVAILABLE = False
+
+
+# =========================================
+# LOAD ENV + CONFIG
+# =========================================
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_URL = os.getenv("GEMINI_API_URL")
+
+BASE_DIR = Path.cwd()
+UPLOAD_FOLDER = BASE_DIR / "uploads"
+UPLOAD_FOLDER.mkdir(exist_ok=True)
+
+app = Flask(__name__, static_folder="static", static_url_path="")
+CORS(app)
+app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
+app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("backend")
+
+
+# =========================================
+# CHATBOT - GEMINI SETUP
+# =========================================
+def call_gemini(user_message):
+    system_prompt = (
+        "You are DETRAN AI — a friendly and accurate assistant explaining ransomware & cybersecurity. "
+        "You assist the DETRAN platform: scanning, YARA rules, quarantine, folder scanning, reports, "
+        "and one-click remediation. Keep responses clear, avoid harmful code."
+    )
+
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": system_prompt + "\n\nUser: " + user_message
+                    }
+                ]
+            }
+        ]
+    }
+
+    endpoint = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
+    resp = requests.post(endpoint, json=payload, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+
+    try:
+        return data["candidates"][0]["content"]["parts"][0]["text"]
+    except:
+        return json.dumps(data)
+
+
+# =========================================
+# YARA RULES
+# =========================================
+YARA_RULES = r"""
+rule RansomNoteGeneric
+{
+    strings:
+        $text1 = "YOUR FILES ARE ENCRYPTED" nocase
+        $text2 = "restore-files" nocase
+        $text3 = "decrypt" nocase
+        $text4 = "ransom" nocase
+    condition:
+        any of them
+}
+"""
+
+compiled_yara = None
+if YARA_AVAILABLE:
+    try:
+        compiled_yara = yara.compile(source=YARA_RULES)
+        log.info("YARA loaded.")
+    except Exception as e:
+        log.warning("YARA failed: %s", e)
+        compiled_yara = None
+
+# =========================================
+# CLAMAV
+# =========================================
+clamd_client = None
+CLAMSCAN_BIN = shutil.which("clamscan") or shutil.which("clamdscan")
+
+if CLAMD_AVAILABLE:
+    try:
+        clamd_client = pyclamd.ClamdAgnostic()
+        clamd_client.ping()
+        log.info("ClamAV daemon available.")
+    except:
+        log.info("ClamAV daemon not active. Using clamscan.")
+else:
+    log.info("pyclamd not installed.")
+
+
+# =========================================
+# HELPERS
+# =========================================
+def shannon_entropy(data: bytes):
+    if not data:
+        return 0.0
+    freq = {}
+    for b in data:
+        freq[b] = freq.get(b, 0) + 1
+    entropy = 0.0
+    length = len(data)
+    for count in freq.values():
+        p = count / length
+        entropy -= p * math.log2(p)
+    return entropy
+
+
+def is_high_entropy(path, threshold=7.5):
+    try:
+        size = os.path.getsize(path)
+        if size < 200:
+            return False, 0.0
+
+        with open(path, "rb") as f:
+            chunk = f.read(65536)
+
+        ent = shannon_entropy(chunk)
+        return ent >= threshold, round(ent, 3)
+
+    except:
+        return False, 0.0
+
+
+def clam_scan(path):
+    try:
+        if clamd_client:
+            res = clamd_client.scan_file(str(path))
+            if isinstance(res, dict):
+                for _, val in res.items():
+                    if val[0] == "FOUND":
+                        return True
+            return False
+
+        if CLAMSCAN_BIN:
+            proc = subprocess.run([CLAMSCAN_BIN, "--no-summary", str(path)],
+                                  capture_output=True, text=True)
+            return "FOUND" in proc.stdout
+
+        return False
+
+    except:
+        return False
+
+
+def yara_check(path):
+    if not compiled_yara:
+        return False
+    try:
+        matches = compiled_yara.match(str(path))
+        return isinstance(matches, list) and len(matches) > 0
+    except:
+        return False
+
+
+def file_type(path):
+    if MAGIC_AVAILABLE:
+        try:
+            m = magic.Magic(mime=True)
+            return m.from_file(str(path))
+        except:
+            return Path(path).suffix.lower()
+    return Path(path).suffix.lower()
+
+
+# =========================================
+# SCAN FILE
+# =========================================
+def scan_file(path):
+    path = Path(path)
+    report = {
+        "file": path.name,
+        "path": str(path),
+        "file_type": file_type(path),
+        "clamav": False,
+        "yara": False,
+        "high_entropy": False,
+        "entropy_value": 0.0,
+        "infected": False
+    }
+
+    c = clam_scan(path)
+    report["clamav"] = c
+    if c: report["infected"] = True
+
+    y = yara_check(path)
+    report["yara"] = y
+    if y: report["infected"] = True
+
+    h, ent = is_high_entropy(path)
+    report["high_entropy"] = h
+    report["entropy_value"] = ent
+    if h: report["infected"] = True
+
+    return report
+
+
+# =========================================
+# ROUTES
+# =========================================
+
+@app.route("/")
+def home():
+    return app.send_static_file("index.html")
+
+
+@app.route("/scan.html")
+def scan_page():
+    return app.send_static_file("scan.html")
+
+
+# Chatbot API
+@app.route("/api/chat", methods=["POST"])
+def chat():
+    msg = request.json.get("message", "").strip()
+    if not msg:
+        return jsonify({"error": "Message required"}), 400
+
+    try:
+        reply = call_gemini(msg)
+        return jsonify({"reply": reply})
+    except Exception as e:
+        return jsonify({"error": "Gemini request failed", "detail": str(e)}), 500
+
+
+# Upload
+@app.route("/upload", methods=["POST"])
+def upload():
+    saved = []
+    for file in request.files.getlist("file"):
+        filename = os.path.basename(file.filename)
+        target = UPLOAD_FOLDER / filename
+        file.save(str(target))
+        saved.append(filename)
+        log.info("Uploaded: %s", filename)
+    return jsonify({"saved": saved})
+
+
+# Scan specific files
+@app.route("/scan_selected", methods=["POST"])
+def scan_selected():
+    files = request.json.get("files", [])
+    summary = {"scanned_files": 0, "infected_count": 0, "files": []}
+
+    for file in files:
+        path = UPLOAD_FOLDER / os.path.basename(file)
+        if not path.exists():
+            continue
+
+        result = scan_file(path)
+        summary["files"].append(result)
+        summary["scanned_files"] += 1
+        if result["infected"]:
+            summary["infected_count"] += 1
+
+    return jsonify(summary)
+
+
+# Scan all uploaded files
+@app.route("/scan_all", methods=["GET"])
+def scan_all():
+    summary = {"scanned_files": 0, "infected_count": 0, "files": []}
+
+    for file in os.listdir(UPLOAD_FOLDER):
+        path = UPLOAD_FOLDER / file
+        if not path.is_file():
+            continue
+
+        result = scan_file(path)
+        summary["files"].append(result)
+        summary["scanned_files"] += 1
+        if result["infected"]:
+            summary["infected_count"] += 1
+
+    return jsonify(summary)
+
+
+# =========================================
+# RUN SERVER
+# =========================================
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

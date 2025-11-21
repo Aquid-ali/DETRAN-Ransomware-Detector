@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Scan Files - DetRan</title>
+</head>
+<body>
+    <!-- Animated Background Particles -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <a href="index.html" style="display: flex; align-items: center; gap: 0.5rem; text-decoration: none;">
+                    <span class="logo-icon">🛡️</span>
+                    <span class="logo-text">DETRAN</span>
+                </a>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html" class="nav-link">HOME</a></li>
+                <li><a href="scan.html" class="nav-link active">SCAN</a></li>
+                <li><a href="index.html#features" class="nav-link">FEATURES</a></li>
+                <li><a href="index.html#about" class="nav-link">ABOUT</a></li>
+                <li><a href="index.html#contact" class="nav-link">CONTACT</a></li>
+            </ul>
+            <button class="mobile-toggle" id="mobileToggle">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Scan Page Content -->
+    <section class="scan-page">
+        <div class="scan-container">
+            <div class="scan-header">
+                <div class="scan-badge">THREAT DETECTION</div>
+                <h1 class="scan-title">SCAN YOUR FILES</h1>
+                <p class="scan-subtitle">Upload your files to detect ransomware and malicious threats using our AI-powered analysis engine</p>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">
+                        <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                    </div>
+                    <h3 class="upload-title">Drop files here or click to browse</h3>
+                    <p class="upload-subtitle">Supports all file types • Max 100MB per file</p>
+                </div>
+
+                <div class="upload-options">
+                    <button class="upload-option-btn" id="filesBtn">
+                        <span>📄</span>
+                        <span>Select Files</span>
+                    </button>
+                    <button class="upload-option-btn" id="folderBtn">
+                        <span>📁</span>
+                        <span>Select Folder</span>
+                    </button>
+                </div>
+
+                <input type="file" class="file-input" id="fileInput" multiple>
+                <input type="file" class="file-input" id="folderInput" webkitdirectory>
+                
+                <div class="file-list" id="fileList"></div>
+                
+                <button class="btn-primary scan-btn" id="scanBtn" style="display: none;">
+                    <span class="btn-icon">🔍</span>
+                    <span>SCAN FILES FOR THREATS</span>
+                    <span class="btn-glow"></span>
+                </button>
+            </div>
+
+            <!-- Security Info Cards -->
+            <div class="security-info">
+                <div class="info-card">
+                    <div class="info-icon">🔒</div>
+                    <h4>Secure Processing</h4>
+                    <p>All files are encrypted and processed securely</p>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">⚡</div>
+                    <h4>Fast Analysis</h4>
+                    <p>Results delivered in seconds with high accuracy</p>
+                </div>
+                <div class="info-card">
+                    <div class="info-icon">🗑️</div>
+                    <h4>Auto Delete</h4>
+                    <p>Files automatically deleted after scanning</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">
+                <span class="logo-icon">🛡️</span>
+                <span class="logo-text">DETRAN</span>
+            </div>
+            <p class="footer-text">© 2024 DetRan. All rights reserved. Protecting your digital world.</p>
+        </div>
+    </footer>
+
+    <!-- Scanning Overlay -->
+    <div class="scanning-overlay" id="scanningOverlay">
+        <div class="scanning-content">
+            <div class="scanner-wrapper">
+                <div class="scanner-ring"></div>
+                <div class="scanner-ring"></div>
+                <div class="scanner-ring"></div>
+                <div class="scanner-center">🔍</div>
+            </div>
+            <h3 class="scanning-text">SCANNING FILES...</h3>
+            <p class="scanning-subtext">Analyzing for potential threats</p>
+            <div class="progress-bar">
+                <div class="progress-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Main JavaScript -->
+    <script>
+        // Particle Animation
+        function createParticles() {
+            const particles = document.getElementById('particles');
+            const particleCount = 50;
+            
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 20 + 's';
+                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                particles.appendChild(particle);
+            }
+        }
+
+        // Mobile Menu Toggle
+        const mobileToggle = document.getElementById('mobileToggle');
+        const navLinks = document.querySelector('.nav-links');
+        
+        mobileToggle.addEventListener('click', () => {
+            navLinks.classList.toggle('active');
+            mobileToggle.classList.toggle('active');
+        });
+
+        // File Upload Logic
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const folderInput = document.getElementById('folderInput');
+        const filesBtn = document.getElementById('filesBtn');
+        const folderBtn = document.getElementById('folderBtn');
+        const fileList = document.getElementById('fileList');
+        const scanBtn = document.getElementById('scanBtn');
+        const scanningOverlay = document.getElementById('scanningOverlay');
+        let files = [];
+
+        // Files button - select individual files
+        filesBtn.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Folder button - select entire folder
+        folderBtn.addEventListener('click', () => {
+            folderInput.click();
+        });
+
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+
+        // Handle drag over
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('drag-over');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('drag-over');
+        });
+
+        // Handle drop
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        // Handle file input change
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            fileInput.value = ''; // Reset input
+        });
+
+        // Handle folder input change
+        folderInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+            folderInput.value = ''; // Reset input
+        });
+
+        function handleFiles(selectedFiles) {
+            Array.from(selectedFiles).forEach(file => {
+                if (!files.some(f => f.name === file.name)) {
+                    files.push(file);
+                    addFileToList(file);
+                }
+            });
+            
+            if (files.length > 0) {
+                scanBtn.style.display = 'flex';
+                setTimeout(() => scanBtn.classList.add('show'), 10);
+            }
+        }
+
+        function addFileToList(file) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            
+            const fileInfo = document.createElement('div');
+            fileInfo.className = 'file-info';
+            
+            const fileIcon = document.createElement('div');
+            fileIcon.className = 'file-icon-badge';
+            fileIcon.textContent = getFileIcon(file.name);
+            
+            const fileDetails = document.createElement('div');
+            fileDetails.className = 'file-details';
+            
+            const fileName = document.createElement('div');
+            fileName.className = 'file-name';
+            fileName.textContent = file.name;
+            
+            const fileSize = document.createElement('div');
+            fileSize.className = 'file-size';
+            fileSize.textContent = formatFileSize(file.size);
+            
+            fileDetails.appendChild(fileName);
+            fileDetails.appendChild(fileSize);
+            fileInfo.appendChild(fileIcon);
+            fileInfo.appendChild(fileDetails);
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'file-remove';
+            removeBtn.innerHTML = '✕';
+            removeBtn.onclick = () => removeFile(file, fileItem);
+            
+            fileItem.appendChild(fileInfo);
+            fileItem.appendChild(removeBtn);
+            
+            // Insert at the beginning instead of appending
+            fileList.insertBefore(fileItem, fileList.firstChild);
+            
+            setTimeout(() => fileItem.classList.add('show'), 10);
+        }
+
+        function removeFile(file, element) {
+            files = files.filter(f => f !== file);
+            element.classList.remove('show');
+            setTimeout(() => {
+                fileList.removeChild(element);
+                if (files.length === 0) {
+                    scanBtn.classList.remove('show');
+                    setTimeout(() => scanBtn.style.display = 'none', 300);
+                }
+            }, 300);
+        }
+
+        function getFileIcon(fileName) {
+            const ext = fileName.split('.').pop().toLowerCase();
+            const icons = {
+                pdf: '📄', doc: '📝', docx: '📝',
+                xls: '📊', xlsx: '📊',
+                jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️',
+                zip: '📦', rar: '📦',
+                mp4: '🎥', avi: '🎥',
+                mp3: '🎵', txt: '📃'
+            };
+            return icons[ext] || '📄';
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Scan Files
+        scanBtn.addEventListener('click', async () => {
+            if (files.length === 0) return;
+            scanningOverlay.classList.add('active');
+
+            const formData = new FormData();
+            files.forEach(file => formData.append("file", file));
+
+            try {
+                const uploadRes = await fetch("http://127.0.0.1:5000/upload", {
+                    method: "POST",
+                    body: formData
+                });
+
+                const uploaded = await uploadRes.json();
+                const filePaths = uploaded.saved.map(name => `uploads/${name}`);
+
+                const scanRes = await fetch("http://127.0.0.1:5000/scan_selected", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ files: filePaths })
+                });
+
+                const scanResult = await scanRes.json();
+                scanningOverlay.classList.remove('active');
+                showScanResults(scanResult);
+
+            } catch (err) {
+                scanningOverlay.classList.remove('active');
+                Swal.fire({
+                    title: "❌ Connection Error",
+                    text: "Backend not responding. Make sure Flask is running.",
+                    icon: "error",
+                    confirmButtonText: "OK",
+                    confirmButtonColor: "#ef4444",
+                    background: "#1a1a2e",
+                    color: "#fff"
+                });
+            }
+        });
+
+        function showScanResults(result) {
+            const infected = result.files.filter(f => f.infected === true);
+            
+            if (infected.length > 0) {
+                let fileListHTML = "<ul style='text-align:left; margin: 15px 0; padding-left: 20px;'>";
+                infected.forEach(file => {
+                    fileListHTML += `<li style='margin: 8px 0;'><b>${file.path}</b></li>`;
+                });
+                fileListHTML += "</ul>";
+
+                Swal.fire({
+                    title: "⚠️ THREAT DETECTED!",
+                    html: `
+                        <p style='margin: 15px 0;'>The following file(s) appear to be <b style='color: #ef4444;'>infected or suspicious</b>:</p>
+                        ${fileListHTML}
+                        <p style="margin-top: 15px; padding: 15px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 4px solid #ef4444;">
+                            ⚠️ It is recommended to quarantine or remove these files immediately.
+                        </p>
+                    `,
+                    icon: "error",
+                    confirmButtonText: "UNDERSTOOD",
+                    confirmButtonColor: "#ef4444",
+                    background: "#1a1a2e",
+                    color: "#fff",
+                    customClass: {
+                        popup: 'swal-custom'
+                    }
+                }).then(() => {
+                    // Clear files after showing results
+                    files = [];
+                    fileList.innerHTML = '';
+                    scanBtn.classList.remove('show');
+                    setTimeout(() => scanBtn.style.display = 'none', 300);
+                });
+            } else {
+                Swal.fire({
+                    title: "✅ ALL CLEAR!",
+                    html: `
+                        <p style='margin: 15px 0; font-size: 16px;'>No threats detected. Your files are safe.</p>
+                        <p style="margin-top: 15px; padding: 15px; background: rgba(52, 211, 153, 0.1); border-radius: 8px; border-left: 4px solid #34d399;">
+                            🛡️ All scanned files passed security checks.
+                        </p>
+                    `,
+                    icon: "success",
+                    confirmButtonText: "GREAT!",
+                    confirmButtonColor: "#34d399",
+                    background: "#1a1a2e",
+                    color: "#fff",
+                    customClass: {
+                        popup: 'swal-custom'
+                    }
+                }).then(() => {
+                    // Clear files after showing results
+                    files = [];
+                    fileList.innerHTML = '';
+                    scanBtn.classList.remove('show');
+                    setTimeout(() => scanBtn.style.display = 'none', 300);
+                });
+            }
+        }
+
+        // Initialize
+        createParticles();
+    </script>
+</body>
+</html>
