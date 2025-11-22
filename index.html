@@ -4,7 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
-
+    
+    <!-- Backend URL Configuration -->
+    <script>
+        // REPLACE THIS WITH YOUR ACTUAL RENDER BACKEND URL
+        window.BACKEND_URL = "https://your-app-name.onrender.com";
+    </script>
     
     <title>DetRan - Ransomware Detection Platform</title>
 </head>
@@ -57,7 +62,6 @@
                 </button>
             </div>
         </div>
-
     </section>
 
     <!-- Stats Section -->
@@ -214,6 +218,25 @@
         </div>
     </footer>
 
+    <!-- Chatbot Widget -->
+    <div id="detran-chatbot-container">
+        <!-- Floating Icon -->
+        <div id="detran-chat-icon">💬</div>
+
+        <!-- Chat Window -->
+        <div id="detran-chat-window">
+            <div class="dw-header">
+                DETRAN AI Assistant
+                <span id="dw-close">✖</span>
+            </div>
+            <div id="dw-messages"></div>
+            <div class="dw-input">
+                <input id="dw-text" type="text" placeholder="Type a message..." />
+                <button id="dw-send">Send</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Main JavaScript -->
     <script>
         // Particle Animation
@@ -311,107 +334,239 @@
 
         statsObserver.observe(document.querySelector('.stats'));
 
+        // Chatbot Functionality
+        const icon = document.getElementById("detran-chat-icon");
+        const win = document.getElementById("detran-chat-window");
+        const closeBtn = document.getElementById("dw-close");
+        const sendBtn = document.getElementById("dw-send");
+        const textInput = document.getElementById("dw-text");
+        const msgBox = document.getElementById("dw-messages");
+
+        // Get backend URL from configuration
+        const BACKEND_URL = window.BACKEND_URL;
+
+        // OPEN/CLOSE widget
+        icon.addEventListener("click", () => {
+            win.style.display = (win.style.display === "flex") ? "none" : "flex";
+            if (win.style.display === "flex") {
+                textInput.focus();
+            }
+        });
+        
+        closeBtn.addEventListener("click", () => {
+            win.style.display = "none";
+        });
+
+        // Add messages visually
+        function addMessage(txt, type) {
+            const div = document.createElement("div");
+            div.className = "msg " + type;
+            div.innerHTML = `<div class="bubble">${txt}</div>`;
+            msgBox.appendChild(div);
+            msgBox.scrollTop = msgBox.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const message = textInput.value.trim();
+            if (!message) return;
+
+            // User bubble
+            addMessage(message, "user");
+            textInput.value = "";
+            
+            // Temporary typing bubble
+            const loading = document.createElement("div");
+            loading.className = "msg bot";
+            loading.innerHTML = `<div class="bubble typing">Typing...</div>`;
+            msgBox.appendChild(loading);
+            msgBox.scrollTop = msgBox.scrollHeight;
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ message })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                loading.remove(); // remove typing bubble
+
+                if (data.reply) {
+                    addMessage(data.reply, "bot");
+                } else if (data.error) {
+                    addMessage(`Error: ${data.error}`, "bot");
+                } else {
+                    addMessage("No response received from server.", "bot");
+                }
+
+            } catch (error) {
+                loading.remove();
+                console.error("Chatbot error:", error);
+                addMessage("Error: Could not connect to DETRAN AI server. Please make sure the backend is running.", "bot");
+            }
+        }
+
+        sendBtn.addEventListener("click", sendMessage);
+
+        // Enter key support
+        textInput.addEventListener("keypress", (e) => {
+            if (e.key === "Enter") sendMessage();
+        });
+
+        // Add welcome message when chat opens first time
+        let welcomeShown = false;
+        icon.addEventListener("click", function showWelcome() {
+            if (!welcomeShown && msgBox.children.length === 0) {
+                addMessage("Hello! I'm DETRAN AI Assistant. I can help you with ransomware detection, cybersecurity questions, and explain how our platform works. How can I assist you today?", "bot");
+                welcomeShown = true;
+            }
+            icon.removeEventListener("click", showWelcome);
+        });
+
         // Initialize
         createParticles();
 
-    </script>
-
-     <div id="detran-chatbot-container">
-
-        <!-- Floating Icon -->
-        <div id="detran-chat-icon">💬</div>
-
-        <!-- Chat Window -->
-        <div id="detran-chat-window">
-
-            <div class="dw-header">
-                DETRAN AI Assistant
-                <span id="dw-close">✖</span>
-            </div>
-
-            <div id="dw-messages"></div>
-
-            <div class="dw-input">
-                <input id="dw-text" type="text" placeholder="Type a message..." />
-                <button id="dw-send">Send</button>
-            </div>
-
-        </div>
-    </div>
-
-    <!-- CHATBOT WIDGET JS -->
-    <script>
-    const icon = document.getElementById("detran-chat-icon");
-    const win = document.getElementById("detran-chat-window");
-    const closeBtn = document.getElementById("dw-close");
-    const sendBtn = document.getElementById("dw-send");
-    const textInput = document.getElementById("dw-text");
-    const msgBox = document.getElementById("dw-messages");
-
-    // OPEN/CLOSE widget
-    icon.addEventListener("click", () => {
-        win.style.display = (win.style.display === "flex") ? "none" : "flex";
-    });
-    closeBtn.addEventListener("click", () => {
-        win.style.display = "none";
-    });
-
-    // Add messages visually
-    function addMessage(txt, type) {
-        const div = document.createElement("div");
-        div.className = "msg " + type;
-        div.innerHTML = `<div class="bubble">${txt}</div>`;
-        msgBox.appendChild(div);
-        msgBox.scrollTop = msgBox.scrollHeight;
-    }
-
-    async function sendMessage() {
-        const message = textInput.value.trim();
-        if (!message) return;
-
-        // User bubble
-        addMessage(message, "user");
-        textInput.value = "";
-        
-        // Temporary typing bubble
-        const loading = document.createElement("div");
-        loading.className = "msg bot";
-        loading.innerHTML = `<div class="bubble">Typing...</div>`;
-        msgBox.appendChild(loading);
-        msgBox.scrollTop = msgBox.scrollHeight;
-
-        try {
-            const response = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message })
-            });
-
-            const data = await response.json();
-
-            loading.remove(); // remove typing bubble
-
-            if (data.reply) {
-                addMessage(data.reply, "bot");
-            } else {
-                addMessage("No response received from server.", "bot");
+        // Add some basic CSS for the chatbot if not in style.css
+        const style = document.createElement('style');
+        style.textContent = `
+            #detran-chatbot-container {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                z-index: 1000;
             }
+            
+            #detran-chat-icon {
+                width: 60px;
+                height: 60px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 24px;
+                cursor: pointer;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                transition: all 0.3s ease;
+            }
+            
+            #detran-chat-icon:hover {
+                transform: scale(1.1);
+            }
+            
+            #detran-chat-window {
+                position: absolute;
+                bottom: 70px;
+                right: 0;
+                width: 350px;
+                height: 500px;
+                background: white;
+                border-radius: 15px;
+                box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+                display: none;
+                flex-direction: column;
+                overflow: hidden;
+            }
+            
+            .dw-header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 15px;
+                font-weight: bold;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            #dw-close {
+                cursor: pointer;
+                font-size: 18px;
+            }
+            
+            #dw-messages {
+                flex: 1;
+                padding: 15px;
+                overflow-y: auto;
+                background: #f8f9fa;
+            }
+            
+            .msg {
+                margin-bottom: 15px;
+                display: flex;
+            }
+            
+            .msg.user {
+                justify-content: flex-end;
+            }
+            
+            .msg.bot {
+                justify-content: flex-start;
+            }
+            
+            .bubble {
+                max-width: 80%;
+                padding: 12px 16px;
+                border-radius: 18px;
+                word-wrap: break-word;
+            }
+            
+            .msg.user .bubble {
+                background: #667eea;
+                color: white;
+                border-bottom-right-radius: 5px;
+            }
+            
+            .msg.bot .bubble {
+                background: white;
+                color: #333;
+                border: 1px solid #e0e0e0;
+                border-bottom-left-radius: 5px;
+            }
+            
+            .bubble.typing {
+                font-style: italic;
+                color: #666;
+            }
+            
+            .dw-input {
+                padding: 15px;
+                border-top: 1px solid #e0e0e0;
+                display: flex;
+                gap: 10px;
+            }
+            
+            #dw-text {
+                flex: 1;
+                padding: 12px;
+                border: 1px solid #ddd;
+                border-radius: 25px;
+                outline: none;
+            }
+            
+            #dw-text:focus {
+                border-color: #667eea;
+            }
+            
+            #dw-send {
+                padding: 12px 20px;
+                background: #667eea;
+                color: white;
+                border: none;
+                border-radius: 25px;
+                cursor: pointer;
+                transition: background 0.3s;
+            }
+            
+            #dw-send:hover {
+                background: #5a6fd8;
+            }
+        `;
+        document.head.appendChild(style);
 
-        } catch (error) {
-            loading.remove();
-            addMessage("Error: Could not connect to DETRAN server.", "bot");
-        }
-    }
-
-    sendBtn.addEventListener("click", sendMessage);
-
-    // Enter key support
-    textInput.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") sendMessage();
-    });
-</script>
-
-
-
+    </script>
 </body>
 </html>
