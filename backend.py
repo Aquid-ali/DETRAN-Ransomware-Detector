@@ -4,6 +4,7 @@ import math
 import subprocess
 import logging
 import shutil
+import random
 from pathlib import Path
 
 from flask import Flask, request, jsonify
@@ -216,6 +217,53 @@ def file_type(path):
     return Path(path).suffix.lower()
 
 
+# >>>> NEW: secure delete helper (overwrite then remove)
+def _is_within_uploads(path: Path):
+    try:
+        # Prevent path traversal - ensure real path is within UPLOAD_FOLDER
+        return str(path.resolve()).startswith(str(UPLOAD_FOLDER.resolve()) + os.sep)
+    except Exception:
+        return False
+
+
+def secure_delete(path: Path, passes: int = 1):
+    """
+    Overwrite file contents with random bytes 'passes' times then remove file.
+    Only operates on files within UPLOAD_FOLDER for safety.
+    Returns True if deletion happened, False otherwise.
+    """
+    try:
+        if not path.exists() or not path.is_file():
+            return False
+
+        if not _is_within_uploads(path):
+            log.warning("Attempt to delete outside uploads folder: %s", path)
+            return False
+
+        size = path.stat().st_size
+        # Overwrite with random data `passes` times (default 1)
+        with open(path, "r+b", buffering=0) as f:
+            for _ in range(passes):
+                f.seek(0)
+                remaining = size
+                # write in chunks to avoid memory blowup
+                while remaining > 0:
+                    chunk_size = min(65536, remaining)
+                    f.write(os.urandom(chunk_size))
+                    remaining -= chunk_size
+                f.flush()
+                os.fsync(f.fileno())
+
+        # Finally remove
+        path.unlink()
+        log.info("Secure-deleted: %s", path)
+        return True
+    except Exception as e:
+        log.exception("secure_delete failed for %s: %s", path, e)
+        return False
+# <<<< end new
+
+
 # =========================================
 # SCAN FILE
 # =========================================
@@ -306,6 +354,19 @@ def scan_selected():
         if result["infected"]:
             summary["infected_count"] += 1
 
+    # >>>> NEW: If infected files found, include list for front-end to ask user for deletion
+    infected_files = [f["file"] for f in summary["files"] if f.get("infected")]
+    if infected_files:
+        summary["deletion_recommended"] = True
+        summary["deletable_files"] = infected_files
+        summary["message"] = (
+            "Infected or suspicious files detected. Recommend deletion. "
+            "Call POST /delete_files with {'files': [...], 'confirm': true} to securely remove them."
+        )
+    else:
+        summary["deletion_recommended"] = False
+        summary["deletable_files"] = []
+
     return jsonify(summary)
 
 
@@ -325,7 +386,74 @@ def scan_all():
         if result["infected"]:
             summary["infected_count"] += 1
 
+    # >>>> NEW: If infected files found, include list for front-end to ask user for deletion
+    infected_files = [f["file"] for f in summary["files"] if f.get("infected")]
+    if infected_files:
+        summary["deletion_recommended"] = True
+        summary["deletable_files"] = infected_files
+        summary["message"] = (
+            "Infected or suspicious files detected. Recommend deletion. "
+            "Call POST /delete_files with {'files': [...], 'confirm': true} to securely remove them."
+        )
+    else:
+        summary["deletion_recommended"] = False
+        summary["deletable_files"] = []
+
     return jsonify(summary)
+
+
+# >>>> NEW: Endpoint to securely delete files (must be in uploads folder)
+@app.route("/delete_files", methods=["POST"])
+def delete_files():
+    """
+    Expect JSON:
+    {
+        "files": ["a.exe", "b.docx"],
+        "confirm": true
+    }
+    This will securely overwrite and remove each file inside UPLOAD_FOLDER.
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    files = body.get("files", [])
+    confirm = body.get("confirm", False)
+
+    if not isinstance(files, list) or not files:
+        return jsonify({"error": "Provide non-empty 'files' list"}), 400
+    if not confirm:
+        return jsonify({"error": "Deletion not confirmed. Set 'confirm': true to proceed."}), 400
+
+    deleted = []
+    failed = []
+
+    for fname in files:
+        # sanitize and confine to uploads folder
+        safe_name = os.path.basename(fname)
+        path = UPLOAD_FOLDER / safe_name
+
+        if not path.exists() or not path.is_file():
+            failed.append({"file": safe_name, "reason": "not found"})
+            continue
+
+        # only allow deletion if inside uploads dir
+        if not _is_within_uploads(path):
+            failed.append({"file": safe_name, "reason": "outside uploads directory"})
+            continue
+
+        ok = secure_delete(path, passes=1)
+        if ok:
+            deleted.append(safe_name)
+        else:
+            failed.append({"file": safe_name, "reason": "delete_failed"})
+
+    return jsonify({
+        "deleted": deleted,
+        "failed": failed,
+        "summary": {
+            "requested": len(files),
+            "deleted_count": len(deleted),
+            "failed_count": len(failed)
+        }
+    })
 
 
 # =========================================
@@ -333,4 +461,3 @@ def scan_all():
 # =========================================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
-

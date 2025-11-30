@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css">
-    
-    
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link rel="stylesheet" href="style.css" />
     <title>Scan Files - DetRan</title>
 </head>
 <body>
@@ -31,9 +29,7 @@
                 <li><a href="index.html#contact" class="nav-link">CONTACT</a></li>
             </ul>
             <button class="mobile-toggle" id="mobileToggle">
-                <span></span>
-                <span></span>
-                <span></span>
+                <span></span><span></span><span></span>
             </button>
         </div>
     </nav>
@@ -155,28 +151,25 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <!-- Main JavaScript -->
-        <!-- Main JavaScript -->
     <script>
         // Particle Animation
         function createParticles() {
             const particles = document.getElementById('particles');
             const particleCount = 50;
-            
             for (let i = 0; i < particleCount; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.left = Math.random() * 100 + '%';
-                particle.style.top = Math.random() * 100 + '%';
-                particle.style.animationDelay = Math.random() * 20 + 's';
-                particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
-                particles.appendChild(particle);
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.top = Math.random() * 100 + '%';
+                p.style.animationDelay = Math.random() * 20 + 's';
+                p.style.animationDuration = (Math.random() * 10 + 10) + 's';
+                particles.appendChild(p);
             }
         }
 
         // Mobile Menu Toggle
         const mobileToggle = document.getElementById('mobileToggle');
         const navLinks = document.querySelector('.nav-links');
-        
         mobileToggle.addEventListener('click', () => {
             navLinks.classList.toggle('active');
             mobileToggle.classList.toggle('active');
@@ -191,23 +184,13 @@
         const fileList = document.getElementById('fileList');
         const scanBtn = document.getElementById('scanBtn');
         const scanningOverlay = document.getElementById('scanningOverlay');
+
         let files = [];
 
-        // Files button - select individual files
-        filesBtn.addEventListener('click', () => {
-            fileInput.click();
-        });
+        filesBtn.addEventListener('click', () => fileInput.click());
+        folderBtn.addEventListener('click', () => folderInput.click());
+        uploadArea.addEventListener('click', () => fileInput.click());
 
-        // Folder button - select entire folder
-        folderBtn.addEventListener('click', () => {
-            folderInput.click();
-        });
-
-        uploadArea.addEventListener('click', () => {
-            fileInput.click();
-        });
-
-        // Handle drag over
         uploadArea.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadArea.classList.add('drag-over');
@@ -217,23 +200,20 @@
             uploadArea.classList.remove('drag-over');
         });
 
-        // Handle drop
         uploadArea.addEventListener('drop', (e) => {
             e.preventDefault();
             uploadArea.classList.remove('drag-over');
             handleFiles(e.dataTransfer.files);
         });
 
-        // Handle file input change
         fileInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
-            fileInput.value = ''; // Reset input
+            fileInput.value = '';
         });
 
-        // Handle folder input change
         folderInput.addEventListener('change', (e) => {
             handleFiles(e.target.files);
-            folderInput.value = ''; // Reset input
+            folderInput.value = '';
         });
 
         function handleFiles(selectedFiles) {
@@ -243,7 +223,6 @@
                     addFileToList(file);
                 }
             });
-            
             if (files.length > 0) {
                 scanBtn.style.display = 'flex';
                 setTimeout(() => scanBtn.classList.add('show'), 10);
@@ -251,51 +230,48 @@
         }
 
         function addFileToList(file) {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            
-            const fileInfo = document.createElement('div');
-            fileInfo.className = 'file-info';
-            
-            const fileIcon = document.createElement('div');
-            fileIcon.className = 'file-icon-badge';
-            fileIcon.innerHTML = getFileIcon(file.name);
-            
-            const fileDetails = document.createElement('div');
-            fileDetails.className = 'file-details';
-            
-            const fileName = document.createElement('div');
-            fileName.className = 'file-name';
-            fileName.textContent = file.name;
-            
-            const fileSize = document.createElement('div');
-            fileSize.className = 'file-size';
-            fileSize.textContent = formatFileSize(file.size);
-            
-            fileDetails.appendChild(fileName);
-            fileDetails.appendChild(fileSize);
-            fileInfo.appendChild(fileIcon);
-            fileInfo.appendChild(fileDetails);
-            
+            const item = document.createElement('div');
+            item.className = 'file-item';
+            const info = document.createElement('div');
+            info.className = 'file-info';
+
+            const icon = document.createElement('div');
+            icon.className = 'file-icon-badge';
+            icon.innerHTML = getFileIcon(file.name);
+
+            const details = document.createElement('div');
+            details.className = 'file-details';
+
+            const name = document.createElement('div');
+            name.className = 'file-name';
+            name.textContent = file.name;
+
+            const size = document.createElement('div');
+            size.className = 'file-size';
+            size.textContent = formatFileSize(file.size);
+
+            details.appendChild(name);
+            details.appendChild(size);
+            info.appendChild(icon);
+            info.appendChild(details);
+
             const removeBtn = document.createElement('button');
             removeBtn.className = 'file-remove';
             removeBtn.innerHTML = '✕';
-            removeBtn.onclick = () => removeFile(file, fileItem);
-            
-            fileItem.appendChild(fileInfo);
-            fileItem.appendChild(removeBtn);
-            
-            // Insert at the beginning instead of appending
-            fileList.insertBefore(fileItem, fileList.firstChild);
-            
-            setTimeout(() => fileItem.classList.add('show'), 10);
+            removeBtn.onclick = () => removeFile(file, item);
+
+            item.appendChild(info);
+            item.appendChild(removeBtn);
+
+            fileList.insertBefore(item, fileList.firstChild);
+            setTimeout(() => item.classList.add('show'), 10);
         }
 
         function removeFile(file, element) {
             files = files.filter(f => f !== file);
             element.classList.remove('show');
             setTimeout(() => {
-                fileList.removeChild(element);
+                if (fileList.contains(element)) fileList.removeChild(element);
                 if (files.length === 0) {
                     scanBtn.classList.remove('show');
                     setTimeout(() => scanBtn.style.display = 'none', 300);
@@ -342,16 +318,15 @@
             files.forEach(file => formData.append("file", file));
 
             try {
-                // CHANGED: Using localhost:5000 instead of BACKEND_URL
                 const uploadRes = await fetch("http://localhost:5000/upload", {
                     method: "POST",
                     body: formData
                 });
 
                 const uploaded = await uploadRes.json();
+                // map to backend-expected paths for scanning
                 const filePaths = uploaded.saved.map(name => `uploads/${name}`);
 
-                // CHANGED: Using localhost:5000 instead of BACKEND_URL
                 const scanRes = await fetch("http://localhost:5000/scan_selected", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -365,8 +340,8 @@
             } catch (err) {
                 scanningOverlay.classList.remove('active');
                 Swal.fire({
-                    title: "❌ Connection Error",
-                    text: "Backend not responding. Make sure Flask is running on localhost:5000.",
+                    title: "Connection problem",
+                    text: "Can't reach the backend. Is the Flask server running on localhost:5000?",
                     icon: "error",
                     confirmButtonText: "OK",
                     confirmButtonColor: "#ef4444",
@@ -376,59 +351,90 @@
             }
         });
 
+        // Build human-friendly reason string for why a file was flagged
+        function buildFlagReasons(file) {
+            const reasons = [];
+            if (file.clamav) reasons.push("ClamAV");
+            if (file.yara) reasons.push("YARA");
+            if (file.high_entropy) reasons.push("High entropy");
+            if (reasons.length === 0) return "Flagged (unknown reason)";
+            return reasons.join(", ");
+        }
+
+        // Show scan results and offer delete action when appropriate
         function showScanResults(result) {
+            // prefer server-provided deletable list if available
             const infected = result.files.filter(f => f.infected === true);
-            
+
             if (infected.length > 0) {
                 let fileListHTML = "<ul style='text-align:left; margin: 15px 0; padding-left: 20px;'>";
                 infected.forEach(file => {
-                    fileListHTML += `<li style='margin: 8px 0;'><b>${file.path}</b></li>`;
+                    const reasons = buildFlagReasons(file);
+                    // show only filename (not full path) to keep it neat
+                    const displayName = file.file || file.path || file.path?.split('/').pop();
+                    fileListHTML += `<li style='margin: 8px 0;'><b>${displayName}</b> — <small style="color:#fca5a5">${reasons}</small></li>`;
                 });
                 fileListHTML += "</ul>";
 
                 Swal.fire({
-                    title: "⚠️ THREAT DETECTED!",
+                    title: "Threats found",
                     html: `
-                        <p style='margin: 15px 0;'>The following file(s) appear to be <b style='color: #ef4444;'>infected or suspicious</b>:</p>
+                        <p style='margin: 15px 0;'>We detected suspicious file(s):</p>
                         ${fileListHTML}
-                        <p style="margin-top: 15px; padding: 15px; background: rgba(239, 68, 68, 0.1); border-radius: 8px; border-left: 4px solid #ef4444;">
-                            ⚠️ It is recommended to quarantine or remove these files immediately.
+                        <p style="margin-top: 12px; font-size: 13px; color: #ddd;">
+                            You can quarantine, download for analysis, or permanently delete these files from the server.
                         </p>
                     `,
-                    icon: "error",
-                    confirmButtonText: "UNDERSTOOD",
+                    icon: "warning",
+                    showCancelButton: true,
+                    showDenyButton: true,
+                    confirmButtonText: "Delete files permanently",
+                    denyButtonText: "Quarantine (keep)",
+                    cancelButtonText: "Close",
                     confirmButtonColor: "#ef4444",
+                    denyButtonColor: "#f59e0b",
                     background: "#1a1a2e",
                     color: "#fff",
-                    customClass: {
-                        popup: 'swal-custom'
-                    }
-                }).then(() => {
-                    // Clear files after showing results
+                    customClass: { popup: 'swal-custom' }
+                }).then((choice) => {
+                    // Clear upload area after interaction regardless
                     files = [];
                     fileList.innerHTML = '';
                     scanBtn.classList.remove('show');
                     setTimeout(() => scanBtn.style.display = 'none', 300);
+
+                    if (choice.isConfirmed) {
+                        // prepare filenames to delete (server expects basenames)
+                        const toDelete = infected.map(f => f.file || (f.path ? f.path.split('/').pop() : null)).filter(Boolean);
+                        promptDeleteFiles(toDelete);
+                    } else if (choice.isDenied) {
+                        Swal.fire({
+                            title: "Quarantine selected",
+                            text: "Files will be left on the server in the uploads folder for further analysis.",
+                            icon: "info",
+                            confirmButtonText: "OK",
+                            background: "#1a1a2e",
+                            color: "#fff"
+                        });
+                    }
                 });
+
             } else {
                 Swal.fire({
-                    title: "✅ ALL CLEAR!",
+                    title: "All clear",
                     html: `
-                        <p style='margin: 15px 0; font-size: 16px;'>No threats detected. Your files are safe.</p>
-                        <p style="margin-top: 15px; padding: 15px; background: rgba(52, 211, 153, 0.1); border-radius: 8px; border-left: 4px solid #34d399;">
-                            🛡️ All scanned files passed security checks.
+                        <p style='margin: 15px 0; font-size: 16px;'>No threats detected. Your files look safe.</p>
+                        <p style="margin-top: 10px; font-size: 13px; color: #d1fae5;">
+                            Tip: keep important backups and avoid running unknown executables.
                         </p>
                     `,
                     icon: "success",
-                    confirmButtonText: "GREAT!",
+                    confirmButtonText: "Nice",
                     confirmButtonColor: "#34d399",
                     background: "#1a1a2e",
                     color: "#fff",
-                    customClass: {
-                        popup: 'swal-custom'
-                    }
+                    customClass: { popup: 'swal-custom' }
                 }).then(() => {
-                    // Clear files after showing results
                     files = [];
                     fileList.innerHTML = '';
                     scanBtn.classList.remove('show');
@@ -437,7 +443,95 @@
             }
         }
 
-        // Initialize
+        // Ask the user one final time before deleting — clearer wording and consequences
+        function promptDeleteFiles(filenames) {
+            if (!filenames || filenames.length === 0) {
+                Swal.fire({ title: "Nothing to delete", icon: "info", confirmButtonText: "OK" });
+                return;
+            }
+
+            const listHtml = filenames.map(n => `<li style="text-align:left;">${n}</li>`).join("");
+
+            Swal.fire({
+                title: "Delete files permanently?",
+                html: `
+                    <p style="text-align:left; margin-bottom:10px;">This will securely overwrite and remove the following files from the server:</p>
+                    <ul style="text-align:left; margin: 0 0 10px 18px;">${listHtml}</ul>
+                    <p style="font-size:12px; color:#fca5a5">This action is irreversible.</p>
+                `,
+                icon: "warning",
+                showCancelButton: true,
+                confirmButtonText: "Yes, delete permanently",
+                cancelButtonText: "No, keep them",
+                confirmButtonColor: "#ef4444",
+                background: "#1a1a2e",
+                color: "#fff"
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    performDelete(filenames);
+                }
+            });
+        }
+
+        // Call backend to securely delete files
+        async function performDelete(filenames) {
+            // show a loading modal while deletion happens
+            Swal.fire({
+                title: "Deleting…",
+                html: "Securely removing files from the server. This may take a few seconds.",
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                willOpen: () => {
+                    Swal.showLoading();
+                },
+                background: "#1a1a2e",
+                color: "#fff"
+            });
+
+            try {
+                const res = await fetch("http://localhost:5000/delete_files", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ files: filenames, confirm: true })
+                });
+
+                const data = await res.json();
+
+                if (res.ok) {
+                    Swal.fire({
+                        title: "Deleted",
+                        html: `<p>${data.deleted.length} file(s) deleted.</p>
+                               ${data.failed && data.failed.length ? `<p style="color:#fca5a5">${data.failed.length} failed to delete.</p>` : ""}`,
+                        icon: "success",
+                        confirmButtonText: "Done",
+                        confirmButtonColor: "#34d399",
+                        background: "#1a1a2e",
+                        color: "#fff"
+                    });
+                } else {
+                    Swal.fire({
+                        title: "Delete failed",
+                        html: `<p>Server responded with an error.</p><pre style="text-align:left; color:#ddd; font-size:12px;">${JSON.stringify(data, null, 2)}</pre>`,
+                        icon: "error",
+                        confirmButtonText: "OK",
+                        background: "#1a1a2e",
+                        color: "#fff"
+                    });
+                }
+            } catch (err) {
+                Swal.fire({
+                    title: "Network error",
+                    text: "Couldn't contact the server to delete files.",
+                    icon: "error",
+                    confirmButtonText: "OK",
+                    background: "#1a1a2e",
+                    color: "#fff"
+                });
+            }
+        }
+
+        // Initialize visual effects
         createParticles();
     </script>
+</body>
 </html>

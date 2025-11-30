@@ -3,3 +3,9 @@ flask-cors
 python-dotenv
 requests
 gunicorn
+python-magic 
+yara-python 
+pyclamd 
+psutil 
+cryptography 
+reportlab
