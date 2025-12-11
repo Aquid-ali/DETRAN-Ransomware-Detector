@@ -11,6 +11,12 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import requests
+import datetime
+import json
+from datetime import datetime
+from zoneinfo import ZoneInfo  # Python 3.9+
+
+
 
 # Optional imports
 try:
@@ -42,6 +48,9 @@ GEMINI_API_URL = os.getenv("GEMINI_API_URL")
 BASE_DIR = Path.cwd()
 UPLOAD_FOLDER = BASE_DIR / "uploads"
 UPLOAD_FOLDER.mkdir(exist_ok=True)
+QUARANTINE_FOLDER = BASE_DIR / "quarantine"
+QUARANTINE_FOLDER.mkdir(exist_ok=True)
+
 
 app = Flask(__name__, static_folder="static", static_url_path="")
 CORS(app)
@@ -50,6 +59,11 @@ app.config["MAX_CONTENT_LENGTH"] = 200 * 1024 * 1024
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("backend")
+LOG_FILE = BASE_DIR / "deletion_logs.jsonl"
+
+IST = ZoneInfo("Asia/Kolkata")
+LOG_FILE = BASE_DIR / "deletion_logs.jsonl"
+
 
 
 # =========================================
@@ -73,9 +87,13 @@ def call_gemini(user_message):
     "   - Scans files for encryption patterns and suspicious behavior\n"
     "   - Provides instant threat analysis and security recommendations\n"
     "   - Supports multiple file types with secure processing\n"
+    "   - Is able to quarantine and delete the suspicious files by asking users\n"
+    "   - Provides logs about the scanned files, deleted files and quarantined files\n"
     "6. Never provide code, exploit details, or hacking techniques\n"
     "7. If unsure, direct users to upload files for scanning\n"
-    "8. Always stay on-topic about cybersecurity and ransomware protection"
+    "8. Always stay on-topic about cybersecurity and ransomware protection\n"
+    "9. Provide users with email id and phone number if they ask which is at the bottom of home page\n"
+    "10.CEO of DETRAN is Aquid Ali and my phone number is 8150081020, Give them only if they ask"
 )
 
     payload = {
@@ -401,6 +419,96 @@ def scan_all():
 
     return jsonify(summary)
 
+def append_deletion_logs(deleted_files):
+    """
+    Append deletion records to LOG_FILE as JSON lines.
+    Each entry: {"file": "<name>", "deleted_at": "<IST ISO timestamp>"}
+    """
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Current time in IST
+        now_ist = datetime.now(IST).isoformat(timespec="seconds")
+        with open(LOG_FILE, "a", encoding="utf-8") as fh:
+            for fname in deleted_files:
+                fh.write(json.dumps({
+                    "file": fname,
+                    "deleted_at": now_ist
+                }) + "\n")
+        return True
+    except Exception as e:
+        log.exception("Failed writing deletion logs: %s", e)
+        return False
+
+
+# >>>> NEW: Endpoint to quarantine files (move from uploads to quarantine folder)
+@app.route("/quarantine_files", methods=["POST"])
+def quarantine_files():
+    """
+    Expect JSON:
+    {
+        "files": ["a.exe", "b.docx"],
+        "confirm": true
+    }
+    This will move each file from UPLOAD_FOLDER to QUARANTINE_FOLDER.
+    """
+    body = request.get_json(force=True, silent=True) or {}
+    files = body.get("files", [])
+    confirm = body.get("confirm", False)
+
+    if not isinstance(files, list) or not files:
+        return jsonify({"error": "Provide non-empty 'files' list"}), 400
+    if not confirm:
+        return jsonify({"error": "Quarantine not confirmed. Set 'confirm': true to proceed."}), 400
+
+    quarantined = []
+    failed = []
+
+    for fname in files:
+        safe_name = os.path.basename(fname)
+        src_path = UPLOAD_FOLDER / safe_name
+        dst_path = QUARANTINE_FOLDER / safe_name
+
+        if not src_path.exists() or not src_path.is_file():
+            failed.append({"file": safe_name, "reason": "not found"})
+            continue
+
+        # Only allow quarantine if inside uploads dir
+        if not _is_within_uploads(src_path):
+            failed.append({"file": safe_name, "reason": "outside uploads directory"})
+            continue
+
+        try:
+            # If a file with same name already exists in quarantine, add a suffix
+            if dst_path.exists():
+                stem = dst_path.stem
+                ext = dst_path.suffix
+                counter = 1
+                while True:
+                    new_name = f"{stem}_q{counter}{ext}"
+                    new_dst = QUARANTINE_FOLDER / new_name
+                    if not new_dst.exists():
+                        dst_path = new_dst
+                        break
+                    counter += 1
+
+            shutil.move(str(src_path), str(dst_path))
+            quarantined.append(str(dst_path.name))
+            log.info("Quarantined %s -> %s", src_path, dst_path)
+        except Exception as e:
+            log.exception("Failed to quarantine %s: %s", src_path, e)
+            failed.append({"file": safe_name, "reason": "quarantine_failed"})
+
+    return jsonify({
+        "quarantined": quarantined,
+        "failed": failed,
+        "summary": {
+            "requested": len(files),
+            "quarantined_count": len(quarantined),
+            "failed_count": len(failed)
+        }
+    })
+
+
 
 # >>>> NEW: Endpoint to securely delete files (must be in uploads folder)
 @app.route("/delete_files", methods=["POST"])
@@ -445,6 +553,11 @@ def delete_files():
         else:
             failed.append({"file": safe_name, "reason": "delete_failed"})
 
+        # Log successful deletions
+        if deleted:
+            append_deletion_logs(deleted)
+
+
     return jsonify({
         "deleted": deleted,
         "failed": failed,
@@ -454,6 +567,38 @@ def delete_files():
             "failed_count": len(failed)
         }
     })
+
+@app.route("/logs", methods=["GET"])
+def get_logs():
+    """
+    Returns deletion logs as JSON list.
+    Query params:
+      - limit (int, optional) -> last N entries (default: all)
+    """
+    limit = request.args.get("limit", type=int)
+    if not LOG_FILE.exists():
+        return jsonify({"logs": []})
+
+    entries = []
+    try:
+        with open(LOG_FILE, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except Exception:
+                    continue
+        # newest last -> reverse to show newest first
+        entries = entries[::-1]
+        if limit and limit > 0:
+            entries = entries[:limit]
+        return jsonify({"logs": entries})
+    except Exception as e:
+        log.exception("Failed reading logs: %s", e)
+        return jsonify({"error": "failed to read logs"}), 500
+
 
 
 # =========================================

@@ -400,12 +400,15 @@
             win.style.display = (win.style.display === "flex") ? "none" : "flex";
             if (win.style.display === "flex") {
                 textInput.focus();
+                // run a quick health check when opening
+                checkAIHealthAndNotify();
             }
         });
         icon1.addEventListener("click", () => {
             win.style.display = (win.style.display === "flex") ? "none" : "flex";
             if (win.style.display === "flex") {
                 textInput.focus();
+                checkAIHealthAndNotify();
             }
         });
         
@@ -422,14 +425,101 @@
             msgBox.scrollTop = msgBox.scrollHeight;
         }
 
+        // helper: show a small persistent notice inside chat header if backend is unreachable
+        function setHeaderNotice(text) {
+            const header = document.querySelector('.dw-header');
+            if (!header) return;
+            // remove any existing notice
+            const existing = header.querySelector('.server-notice');
+            if (existing) existing.remove();
+
+            if (text) {
+                const span = document.createElement('span');
+                span.className = 'server-notice';
+                span.style.cssText = 'margin-left:10px; font-size:13px; color:#ffd082; font-weight:600;';
+                span.textContent = text;
+                header.appendChild(span);
+            }
+        }
+
+        // Lightweight health check that attempts a small POST with short timeout.
+        // Does NOT change server state. Shows reason if unreachable.
+        async function checkAIHealth(timeoutMs = 3000) {
+            // If page loaded over https and backend is http, warn about mixed content
+            const backendUrl = "http://localhost:5000/api/chat";
+            if (location.protocol === 'https:' && backendUrl.startsWith('http:')) {
+                return { ok: false, reason: 'Mixed Content — page is HTTPS while backend is HTTP. Browser will block requests.' };
+            }
+
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+
+            try {
+                // send a tiny ping message (server will validate and respond or error)
+                const res = await fetch(backendUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: '__health_check_ping__' }),
+                    signal: controller.signal
+                });
+                clearTimeout(id);
+
+                if (!res.ok) {
+                    // try to parse body for details
+                    let body = await res.text().catch(() => '');
+                    let parsed = null;
+                    try { parsed = JSON.parse(body); } catch (e) { /* ignore */ }
+                    const reason = parsed ? (parsed.error || parsed.detail || JSON.stringify(parsed)) : (body || `${res.status} ${res.statusText}`);
+                    return { ok: false, reason };
+                }
+
+                // ok
+                return { ok: true };
+            } catch (err) {
+                clearTimeout(id);
+                // Choose friendly error text
+                if (err.name === 'AbortError') {
+                    return { ok: false, reason: `Health check timed out after ${timeoutMs}ms` };
+                }
+                return { ok: false, reason: err.message || String(err) };
+            }
+        }
+
+        // Call health check and show a small notice in the header if problem
+        async function checkAIHealthAndNotify() {
+            setHeaderNotice('Checking DETRAN AI...');
+            const r = await checkAIHealth(4000);
+            if (r.ok) {
+                setHeaderNotice(null);
+                return true;
+            } else {
+                setHeaderNotice('DETRAN AI unreachable');
+                // also show one friendly message in chat box
+                addMessage(`DETRAN AI server: ${r.reason}`, "bot");
+                return false;
+            }
+        }
+
+        // helper to safely remove loading
+        function removeIfElement(el) {
+            try { if (el && el.parentNode) el.parentNode.removeChild(el); } catch(e){}
+        }
+
         async function sendMessage() {
             const message = textInput.value.trim();
             if (!message) return;
 
+            // check health first (quick)
+            const health = await checkAIHealth(3000);
+            if (!health.ok) {
+                addMessage(`Error: DETRAN AI unreachable — ${health.reason}`, "bot");
+                return;
+            }
+
             // User bubble
             addMessage(message, "user");
             textInput.value = "";
-            
+
             // Temporary typing bubble
             const loading = document.createElement("div");
             loading.className = "msg bot";
@@ -437,33 +527,52 @@
             msgBox.appendChild(loading);
             msgBox.scrollTop = msgBox.scrollHeight;
 
+            // helper to remove loading if present
+            function safeRemoveLoading() {
+                removeIfElement(loading);
+            }
+
             try {
-                // CHANGED: Using localhost:5000 instead of BACKEND_URL
                 const response = await fetch("http://localhost:5000/api/chat", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ message })
                 });
 
+                // If the server responded with non-2xx, try to parse body for details
                 if (!response.ok) {
-                    throw new Error(`Server error: ${response.status}`);
+                    let bodyText = await response.text().catch(() => "");
+                    let parsed = null;
+                    try { parsed = JSON.parse(bodyText); } catch (e) { /* not json */ }
+
+                    const serverMsg = parsed ? (parsed.error || parsed.detail || JSON.stringify(parsed)) : bodyText || `${response.status} ${response.statusText}`;
+                    safeRemoveLoading();
+                    console.error("Server returned error:", response.status, serverMsg);
+                    addMessage(`Server error ${response.status}: ${serverMsg}`, "bot");
+                    return;
                 }
 
+                // ok -> parse JSON
                 const data = await response.json();
-                loading.remove(); // remove typing bubble
+                safeRemoveLoading();
 
                 if (data.reply) {
                     addMessage(data.reply, "bot");
                 } else if (data.error) {
-                    addMessage(`Error: ${data.error}`, "bot");
+                    // server sent a structured error: show it
+                    addMessage(`Error: ${data.error}${data.detail ? " — " + data.detail : ""}`, "bot");
                 } else {
                     addMessage("No response received from server.", "bot");
                 }
 
             } catch (error) {
-                loading.remove();
+                // network/CORS/other fetch-level error
+                safeRemoveLoading();
                 console.error("Chatbot error:", error);
-                addMessage("Error: Could not connect to DETRAN AI server. Please make sure Flask is running on localhost:5000.", "bot");
+
+                // show the real error message if available
+                const errMsg = error && error.message ? error.message : String(error);
+                addMessage(`Error: Could not contact DETRAN AI server — ${errMsg}`, "bot");
             }
         }
 
